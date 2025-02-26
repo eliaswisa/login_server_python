@@ -148,3 +148,8 @@ node_modules/
 Lib/
 Scripts/
 pyvenv.cfg
+
+
+#google user data
+client_secret_*.json
+sys_path.txt

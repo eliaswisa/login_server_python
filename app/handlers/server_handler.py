@@ -1,17 +1,71 @@
-from app.services.server_services import authenticate_user, register_user, authenticate_user_via_google, register_user_via_google, google_mail_link_request
+from app.services.server_services import authenticate_user, register_user, authenticate_user_via_google, \
+    register_user_via_google, google_mail_link_request, password_reset, update_password_service, \
+    password_reset_flag_checker, change_password_service
 from app.models.userModel import LoginRequest, RegisterRequest, GoogleAuthRequest, Email
 from fastapi.responses import JSONResponse
-from fastapi import APIRouter
 from app.models.userModel import GoogleAuthRequest
+from fastapi import HTTPException
+
+
+async def change_password_handler(request: LoginRequest):
+    response = await change_password_service(request)
+
+    if response["status"] == "success":
+        return {"status": response["status"], "message": response["message"]}, 200
+    else:
+
+        raise HTTPException(status_code=400, detail={"status": "error", "message": "Password not updated."})
+
+
+async def password_updater_by_form(email: str, password: str, password_again: str):
+    if password != password_again:
+        return {"error": "Passwords do not match"}
+
+    return await update_password_service(email, password)
+
+
+async def password_reset_flag_checker_handler(email: str):
+    response = await password_reset_flag_checker(email)
+
+    if response["status"] == "success":
+        return {"status": "success", "message": response["message"]}, 200
+
+    # אם יש שגיאה, נחזיר את קוד הסטטוס המתאים
+    if "isn't reset" in response["message"]:
+        raise HTTPException(status_code=404, detail=response["message"])
+    elif "expired" in response["message"]:
+        raise HTTPException(status_code=400, detail=response["message"])
+    else:
+        raise HTTPException(status_code=500, detail="Database error")
+
+
+async def reset_password_from_link_handler(email: str, token: str):
+    response = await password_reset(email, token)
+
+    if 'error' in response:
+        return {"status": "failed", "message": response["error"]}  # החזרת שגיאה אם יש
+
+    return {"status": "success", "message": response["message"]}
 
 
 async def google_mail_link_send(request: Email):
-    response = await google_mail_link_request(request.email)
-    if "error" in response:
-        error_message = response.get("error")
-        if error_message == "mail send fail":  # תיקון ההזחה
-            return {"message": "Failed to send mail"}
-    ##
+    # שלח בקשה לפונקציה google_mail_link_request
+    response = await google_mail_link_request(request)
+
+    # בדיקה אם יש "status" בתגובה
+    if "status" in response:
+        # אם המייל נשלח לאחרונה, מחזירים הודעה למשתמש
+        if response["status"] == "already_sent":
+            return {"message": response["message"]}
+
+        # אם המייל נשלח בהצלחה
+        if response["status"] == "sent":
+            return {"message": response["message"]}
+
+    # אם התגובה לא תואמת את הציפיות
+    return {"message": "Unexpected response from mail service"}
+
+
 async def login_handler(request: LoginRequest):
     user = await authenticate_user(request.email, request.password)
 

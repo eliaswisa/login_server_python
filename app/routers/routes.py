@@ -1,13 +1,14 @@
-from fastapi import APIRouter
 from app.handlers.server_handler import login_handler, register_handler, login_via_google_handler, \
-    register_via_google_handler, google_auth_callback_handler, google_mail_link_send
-from app.models.userModel import GoogleAuthRequest, RegisterRequest, LoginRequest, Email
+    register_via_google_handler, google_auth_callback_handler, google_mail_link_send, reset_password_from_link_handler, \
+    password_updater_by_form, password_reset_flag_checker_handler, change_password_handler
+from app.models.userModel import GoogleAuthRequest, RegisterRequest, LoginRequest, Email, PasswordResetRequest
 from fastapi import Request
+from fastapi import APIRouter
 
 router = APIRouter()
 
-
-#כאן צריך להוסיף ראוט שמטרתו ללכת ל קולקשן החדש שאפתח ושם לפתוח אוביקט שמכיל שדה מייל , שדה אישור לאיפוס סיסמא V ואולי עוד שדה להיזכר אם כן
+# כאן צריך להוסיף ראוט שמטרתו ללכת ל קולקשן החדש שאפתח ושם לפתוח אוביקט שמכיל שדה מייל , שדה אישור לאיפוס סיסמא V ואולי עוד שדה להיזכר אם כן
+router = APIRouter()
 
 
 @router.post("/reset_password_link")
@@ -45,3 +46,22 @@ async def google_auth_callback(request: Request):
     return await google_auth_callback_handler(data)
 
 
+@router.post("/reset_password_form")
+async def reset_password_form_handler(request: PasswordResetRequest):
+    return await password_updater_by_form(request.email, request.password, request.password_again)
+
+
+@router.post("/password_reset_flag_checker")
+async def reset_password_form_handler(request: Email):
+    return await password_reset_flag_checker_handler(request.email)
+
+
+@router.get("/reset_password_from_link")
+async def google_mail_link_sender(email: str, token: str):
+    # כאן email ו-token יגיעו מה-URL
+    return await reset_password_from_link_handler(email, token)
+
+
+@router.post("/change_password_after_forgot")
+async def password_changer(request: LoginRequest):
+    return await change_password_handler(request)
