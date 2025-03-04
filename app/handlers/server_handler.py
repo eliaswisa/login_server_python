@@ -76,7 +76,8 @@ async def login_handler(request: LoginRequest):
             return JSONResponse(
                 content={
                     "error": error_message,
-                    "toast": user.get("toast", {})  # הוספת הודעת ה-toast אם קיימת
+                    "toast": user.get("toast", {}),  # הוספת הודעת ה-toast אם קיימת
+                    "token": user.get("token")
                 },
                 status_code=400
             )
@@ -86,17 +87,17 @@ async def login_handler(request: LoginRequest):
                 "error": "Authentication failed",
                 "message": error_message,
                 "toast": user.get("toast", {})  # הוספת הודעת ה-toast אם קיימת
+
             },
             status_code=400
         )
 
     return {
         "message": "User authenticated",
-        "toast": user.get("toast", {})  # הוספת הודעת ה-toast אם קיימת
+        "toast": user.get("toast", {}),  # הוספת הודעת ה-toast אם קיימת
+        "token": user.get("token")
     }
 
-
-# פונקציה לרישום
 
 async def register_handler(request: RegisterRequest):
     user = await register_user(request.email, request.password, request.full_name)
@@ -118,7 +119,6 @@ async def register_handler(request: RegisterRequest):
     }
 
 
-# פונקציה להתחברות דרך גוגל
 async def login_via_google_handler(request: GoogleAuthRequest):
     user = await authenticate_user_via_google(request.token)
     if "error" in user:
@@ -126,10 +126,9 @@ async def login_via_google_handler(request: GoogleAuthRequest):
             content={"error": "Authentication failed", "message": "Invalid token"},
             status_code=400
         )
-    return {"message": "User authenticated via Google"}
+    return {"message": "User authenticated via Google", "token": user.get("token")}
 
 
-# פונקציה לרישום דרך גוגל
 async def register_via_google_handler(request: GoogleAuthRequest):
     user = await register_user_via_google(request.token)
     if "error" in user:
@@ -137,7 +136,7 @@ async def register_via_google_handler(request: GoogleAuthRequest):
             content={"error": "Registration failed", "message": "User already exists"},
             status_code=400
         )
-    return {"message": "User registered successfully via Google"}
+    return {"message": "User registered successfully via Google", "token": user.get("token")}
 
 
 async def google_auth_callback_handler(data: dict):
@@ -153,5 +152,6 @@ async def google_auth_callback_handler(data: dict):
     return {
         "message": "User registered successfully via Google",
         "user": user["user"],
-        "toast": user.get("toast")
+        "toast": user.get("toast"),
+        "token": user.get("token")
     }

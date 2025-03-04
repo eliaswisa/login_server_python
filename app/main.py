@@ -61,6 +61,7 @@ if __name__ == "__main__":
     scheduler_thread = threading.Thread(target=run_scheduler)
     scheduler_thread.start()
 
+
 def create_app():
     @asynccontextmanager
     async def lifespan(app: FastAPI):

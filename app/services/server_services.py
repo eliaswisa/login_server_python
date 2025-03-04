@@ -2,6 +2,7 @@
 import uuid
 from app.database import db
 from app.requests.requests import get_toast, send_link_to_email  # ייבוא הפונקציה get_toast
+from app.services.utils import create_jwt_token
 import random
 import requests
 from fastapi import HTTPException
@@ -65,6 +66,7 @@ async def update_password_service(email: str, password: str):
     else:
         return {"error": "Failed to update password"}
 
+
 async def password_reset(email: str, token: str):
     try:
         # חפש את המשתמש
@@ -104,7 +106,6 @@ async def password_reset(email: str, token: str):
     except Exception as e:
         # במקרה של שגיאה, נחזיר את ההודעה של הצלחה
         return {"message": "הסיסמה אופסה. אנא חזור לאתר בהקדם על מנת להגדיר סיסמה חדשה."}
-
 
 
 async def google_mail_link_request(email: str):
@@ -193,21 +194,6 @@ async def google_mail_link_request(email: str):
         raise e  # זריקת השגיאה אם יש בעיה
 
 
-async def authenticate_user(email: str, password: str):
-    user = await db.users.find_one({"email": email})
-    if not user:
-        return {"error": "User does not exist"}
-    if user["password"] != password:
-        return {"error": "Incorrect password"}
-
-    # המרת ה-ObjectId לערך string
-    user["_id"] = str(user["_id"])
-
-    #toast_message = await get_toast(user)
-    toast_message = "hello "+ " "
-    return {"user": user, "toast": {"message": toast_message}}
-from bson import ObjectId
-
 async def register_user(email: str, password: str, full_name: str):
     existing_user = await db.users.find_one({"email": email})
     if existing_user:
@@ -236,6 +222,29 @@ async def register_user(email: str, password: str, full_name: str):
     }
 
 
+async def authenticate_user(email: str, password: str):
+    user = await db.users.find_one({"email": email})
+    if not user:
+        return {"error": "User does not exist"}
+    if user["password"] != password:
+        return {"error": "Incorrect password"}
+
+
+    # המרת ה-ObjectId לערך string
+    user["_id"] = str(user["_id"])
+
+    # יצירת ה-JWT באמצעות הפונקציה שלך
+    token = await create_jwt_token(user)
+
+    toast_message = "hello " + " "
+    return {
+        "user": user,
+        "toast": {"message": toast_message},
+        "token": token  # החזרת ה-JWT יחד עם התגובה
+    }
+
+
+
 async def authenticate_user_via_google(token: str):
     url = f"https://www.googleapis.com/oauth2/v3/tokeninfo?id_token={token}"
     response = requests.get(url)
@@ -245,14 +254,17 @@ async def authenticate_user_via_google(token: str):
     user = await db.users.find_one({"email": user_info["email"]})
     if not user:
         return {"error": "User does not exist"}
-    return {"message": "Login successful", "user": user}
 
+    # יצירת ה-JWT באמצעות הפונקציה שלך
+    user["_id"] = str(user["_id"])
 
+    jwt_token = await create_jwt_token(user)
 
-# פונקציה ליצירת סיסמה זמנית רנדומלית
-def generate_temp_password():
-    """פונקציה ליצירת סיסמה זמנית אוטומטית באורך 9 תווים"""
-    return ''.join(random.choice('123456789') for _ in range(9))
+    return {
+        "message": "Login successful",
+        "user": user,
+        "token": jwt_token  # החזרת ה-JWT יחד עם התגובה
+    }
 
 
 async def register_user_via_google(access_token: str):
@@ -292,29 +304,34 @@ async def register_user_via_google(access_token: str):
 
     if existing_user:
         password = existing_user.get("password")  # חילוץ הסיסמה
-        return await authenticate_user(user_email, password)  # שליחה של הסיסמה לפונקציה
+        response = await authenticate_user(user_email, password)  # שליחה של הסיסמה לפונקציה
+
+        # יצירת ה-JWT באמצעות הפונקציה שלך
+        existing_user["_id"] = str(existing_user["_id"])
+
+        jwt_token = await create_jwt_token(existing_user)
+
+        response["token"] = jwt_token  # הוספת ה-JWT לתגובה
+        return response
 
     temp_password = generate_temp_password()
 
     new_user = await register_user(user_email, temp_password, user_name)
+    new_user["_id"] = str(new_user["_id"])
+
+    # יצירת ה-JWT באמצעות הפונקציה שלך
+    jwt_token = await create_jwt_token(new_user["user"])
 
     return {
         "message": "Registration successful",
         "user": new_user["user"],
         "temp_password": new_user["user"]["password"],
-        "toast": new_user["toast"]["message"]
+        "toast": new_user["toast"]["message"],
+        "token": jwt_token  # החזרת ה-JWT יחד עם התגובה
     }
 
 
-# הפונקציה register_user שומרת את המשתמש החדש ב-DB
-"""
-async def register_user(email: str, password: str, full_name: str):
-    existing_user = await db.users.find_one({"email": email})
-    if existing_user:
-        return {"error": "User already exists"}
-    new_user = {"full_name": full_name, "password": password, "email": email}
-    await db.users.insert_one(new_user)
-    return {"message": "Registration successful", "user": new_user}
-"""
-
+def generate_temp_password():
+    """פונקציה ליצירת סיסמה זמנית אוטומטית באורך 9 תווים"""
+    return ''.join(random.choice('123456789') for _ in range(9))
 
